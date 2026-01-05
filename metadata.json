@@ -1,0 +1,8 @@
+{
+  "name": "TrafficEye: Smart Violation Analytics",
+  "description": "A comprehensive real-time simulation dashboard for detecting and analyzing traffic violations including over-speeding, signal jumping, and safety gear compliance.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}
