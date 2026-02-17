@@ -11,7 +11,8 @@ import { saveViolation } from './storage';
 const VEHICLE_PREFIXES = ['KA', 'MH', 'DL', 'TN', 'UP', 'HR', 'GA'];
 const VEHICLE_TYPES = ['Car', 'Motorcycle', 'Truck', 'Bus', 'Auto'] as const;
 const JUNCTIONS = ['Central Plaza', 'East Highway', 'Silk Board', 'Airport Road', 'Metro Junction'];
-const WEATHER_TYPES = ['Clear', 'Rainy', 'Foggy'] as const;
+// Fixed: Changed 'Clear' to 'Sunny' to match WeatherState type
+const WEATHER_TYPES = ['Sunny', 'Rainy', 'Foggy'] as const;
 
 export const generateVehicleData = (): VehicleData => {
   const prefix = VEHICLE_PREFIXES[Math.floor(Math.random() * VEHICLE_PREFIXES.length)];
@@ -97,7 +98,8 @@ export const detectViolations = (
       officerId: 'SYS_ADMIN',
       speedLimit: customSpeedLimit,
       confidenceScore: confidenceScore,
-      requiresReview: confidenceScore < 0.75
+      requiresReview: confidenceScore < 0.75,
+      aggressionScore: Math.floor(Math.random() * 100)
     };
     saveViolation(record);
     return record;

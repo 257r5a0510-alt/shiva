@@ -1,179 +1,197 @@
 
 import { GoogleGenAI } from "@google/genai";
-import { VehicleCategory } from "../types";
+import { VehicleCategory, WeatherState } from "../types";
+
+export interface Detection {
+  box: [number, number, number, number]; // [x, y, w, h] as percentages
+  label: string;
+  speed?: number;
+  behavior?: string;
+  id: string;
+}
+
+export interface Incident {
+  type: 'accident' | 'near-miss' | 'erratic_driving' | 'obstruction';
+  severity: 'low' | 'medium' | 'high';
+  description: string;
+  timestamp: number;
+}
+
+export interface ForensicReport {
+  detections: Detection[];
+  incidents: Incident[];
+  aggressionScore: number;
+  riskScore: number;
+  summary: string;
+  infrastructureAdvice: string;
+  isRateLimited?: boolean;
+}
+
+export interface BoundingBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
 
 export interface AIAnalysisResult {
   vehicleNumber: string;
   vehicleType: VehicleCategory;
-  plateConfidence: number;
-  vehicleConfidence: number;
-  overallConfidence: number;
   estimatedSpeed: number;
-  distanceMetres: number;
-  speedDerivation: string;
   riderCount: number;
   helmetDetected: boolean;
   seatbeltDetected: boolean;
-  boundingBox?: { x: number, y: number, w: number, h: number };
-  plateBoundingBox?: { x: number, y: number, w: number, h: number };
-  calibrationMarkers?: { x: number, y: number }[];
+  confidence: { overall: number; localization: number; ocr: number; patternMatch: number };
+  rawOcr: string;
+  processingSteps: string[];
+  boundingBox?: BoundingBox;
+  plateBoundingBox?: BoundingBox;
 }
 
 export interface EnhancementResult {
-  deblurredImageUrl: string;
-  forensicSummary: string;
   confidence: number;
+  forensicSummary: string;
 }
 
-export interface TrafficDensityResult {
-  text: string;
-  links: { title: string; uri: string }[];
-}
-
-export const analyzeVehicleImage = async (base64Image: string): Promise<AIAnalysisResult | null> => {
-  try {
-    // Initializing Gemini for high-precision forensic detection
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview', // Upgraded to pro for forensic analysis
-      contents: {
-        parts: [
-          {
-            inlineData: {
-              mimeType: 'image/jpeg',
-              data: base64Image.split(',')[1]
-            }
-          },
-          {
-            text: `Perform a high-precision forensic and safety compliance analysis.
-            
-            ENGINEERING GOALS:
-            1. LICENSE PLATE OCR: Extract alphanumeric string.
-            2. OCCUPANT DETECTION: Count every person visible on or in the vehicle.
-            3. SAFETY GEAR AUDIT:
-               - MOTORCYCLES: Check if ALL riders are wearing helmets.
-               - CARS/TRUCKS: Detect if the driver is wearing a seat belt (diagonal strap across shoulder).
-            4. VELOCITY: Calculate speed using pixel displacement and a 1ms shutter reference.
-            
-            Return strictly in valid JSON format:
-            {
-              "vehicleNumber": "STRING",
-              "vehicleType": "Car" | "Motorcycle" | "Truck" | "Bus" | "Auto",
-              "riderCount": INTEGER,
-              "helmetDetected": BOOLEAN,
-              "seatbeltDetected": BOOLEAN,
-              "estimatedSpeed": FLOAT,
-              "distanceMetres": FLOAT,
-              "speedDerivation": "Technical breakdown of velocity",
-              "plateConfidence": FLOAT,
-              "vehicleConfidence": FLOAT,
-              "boundingBox": {"x": percentage, "y": percentage, "w": percentage, "h": percentage},
-              "plateBoundingBox": {"x": percentage, "y": percentage, "w": percentage, "h": percentage},
-              "calibrationMarkers": [{"x": percentage, "y": percentage}]
-            }`
-          }
-        ]
-      },
-      config: {
-        responseMimeType: "application/json"
+/**
+ * Utility to handle API calls with exponential backoff for rate limits (429 errors).
+ */
+async function callAIWithRetry<T>(fn: () => Promise<T>, maxRetries = 2): Promise<T> {
+  let attempt = 0;
+  while (attempt <= maxRetries) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      const isRateLimit = error?.message?.includes('429') || error?.status === 429 || error?.message?.includes('RESOURCE_EXHAUSTED');
+      if (isRateLimit && attempt < maxRetries) {
+        const delay = Math.pow(2, attempt) * 2000 + Math.random() * 1000;
+        console.warn(`Rate limit hit. Retrying in ${Math.round(delay)}ms... (Attempt ${attempt + 1})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        attempt++;
+        continue;
       }
-    });
+      throw error;
+    }
+  }
+  throw new Error('Max retries exceeded');
+}
 
-    const result = JSON.parse(response.text || '{}');
-    return {
-      vehicleNumber: result.vehicleNumber?.toUpperCase() || 'UNKNOWN',
-      vehicleType: (result.vehicleType as VehicleCategory) || 'Car',
-      riderCount: result.riderCount || 1,
-      helmetDetected: result.helmetDetected ?? true,
-      seatbeltDetected: result.seatbeltDetected ?? true,
-      estimatedSpeed: result.estimatedSpeed || 0,
-      distanceMetres: result.distanceMetres || 0,
-      speedDerivation: result.speedDerivation || "Standard vector analysis.",
-      plateConfidence: result.plateConfidence || 0,
-      vehicleConfidence: result.vehicleConfidence || 0,
-      overallConfidence: (result.plateConfidence + result.vehicleConfidence) / 2,
-      boundingBox: result.boundingBox,
-      plateBoundingBox: result.plateBoundingBox,
-      calibrationMarkers: result.calibrationMarkers
-    };
-  } catch (error) {
-    console.error("AI Analysis failed:", error);
+export const analyzeRouteSafety = async (source: string, destination: string, weather: WeatherState): Promise<string> => {
+  return callAIWithRetry(async () => {
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `Perform a tactical traffic safety audit for a route from ${source} to ${destination} in an Indian city context during ${weather} weather.
+        Identify 1 specific road safety risk (e.g., specific junction accidents, waterlogging, or high-speed curves) and give 1 actionable advice for the driver.
+        Keep it under 30 words.`
+      });
+      return response.text.trim();
+    } catch (error) {
+      return "Caution: Dynamic traffic density detected. Maintain standard safe distance.";
+    }
+  });
+};
+
+export const analyzeTrafficVideoFrame = async (base64Image: string, weather: WeatherState, historySummary?: string): Promise<ForensicReport | null> => {
+  try {
+    return await callAIWithRetry(async () => {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: {
+          parts: [
+            { inlineData: { mimeType: 'image/jpeg', data: base64Image.split(',')[1] } },
+            { text: `Act as a specialized traffic vision system. Analyze this frame from a traffic feed. 
+            Context: Weather is ${weather}. 
+            Previous Context (for tracking): ${historySummary || 'None'}.
+
+            Detect and return a JSON object with:
+            1. 'detections': Array of detected objects (car, motorcycle, pedestrian, truck, debris). 
+               Include 'box' [x, y, w, h] as percentages, 'label', 'speed' (estimate in km/h), 'behavior' (braking, turning, accelerating, stationary), and a consistent 'id' if possible.
+            2. 'incidents': Array of current anomalies. Types: 'accident' (collisions, flipped vehicles), 'near-miss' (dangerous proximity), 'erratic_driving' (lane weaving, sudden stops), 'obstruction' (debris, stalled vehicle).
+            3. 'aggressionScore': 0-100 score for overall traffic flow chaos.
+            4. 'riskScore': 0-100 safety risk level.
+            5. 'summary': A concise one-sentence status (e.g., "Flowing smoothly" or "Accident detected in lane 2").
+            6. 'infrastructureAdvice': Practical urban engineering suggestion based on visible congestion or behavior.
+
+            If NO accident is detected, return an empty 'incidents' array. Do not invent accidents.
+            Return ONLY valid JSON.` }
+          ]
+        },
+        config: { responseMimeType: "application/json" }
+      });
+      const text = response.text;
+      return text ? JSON.parse(text) : null;
+    }, 1); // Only 1 retry for real-time video to avoid excessive lag
+  } catch (error: any) {
+    if (error?.message?.includes('429') || error?.message?.includes('RESOURCE_EXHAUSTED')) {
+      return {
+        detections: [],
+        incidents: [],
+        aggressionScore: 0,
+        riskScore: 0,
+        summary: "Neural link throttled by API quota limits.",
+        infrastructureAdvice: "Increase compute quota or optimize frame intervals.",
+        isRateLimited: true
+      };
+    }
+    console.error("Neural Analysis Failed:", error);
     return null;
   }
+};
+
+export const analyzeVehicleImage = async (base64Image: string): Promise<AIAnalysisResult | null> => {
+  return callAIWithRetry(async () => {
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: {
+          parts: [
+            { inlineData: { mimeType: 'image/jpeg', data: base64Image.split(',')[1] } },
+            { text: `Analyze this vehicle image for forensic traffic data extraction. Provide vehicleNumber, vehicleType, estimatedSpeed, riderCount, helmetDetected (boolean), seatbeltDetected (boolean), confidence scores, boundingBox, and plateBoundingBox (each with x, y, w, h in percentages). Return as JSON.` }
+          ]
+        },
+        config: { responseMimeType: "application/json" }
+      });
+      const text = response.text;
+      return text ? JSON.parse(text) : null;
+    } catch (error) {
+      return null;
+    }
+  });
 };
 
 export const enhanceCCTVImage = async (base64Image: string): Promise<EnhancementResult | null> => {
-  try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview', // Upgraded for high-quality image reconstruction reasoning
-      contents: {
-        parts: [
-          {
-            inlineData: {
-              mimeType: 'image/jpeg',
-              data: base64Image.split(',')[1]
-            }
-          },
-          {
-            text: "Analyze this blurred CCTV image. Provide a detailed forensic reconstruction of what is likely present but obscured. Return JSON with 'forensicSummary' and 'confidence'."
-          }
-        ]
-      },
-      config: { responseMimeType: "application/json" }
-    });
-    const result = JSON.parse(response.text || '{}');
-    return {
-      deblurredImageUrl: base64Image,
-      forensicSummary: result.forensicSummary,
-      confidence: result.confidence || 0.85
-    };
-  } catch (error) {
-    return null;
-  }
+  return callAIWithRetry(async () => {
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: {
+          parts: [
+            { inlineData: { mimeType: 'image/jpeg', data: base64Image.split(',')[1] } },
+            { text: `Perform forensic enhancement on this CCTV frame. Improve clarity for identification. Provide a confidence score (0-1) and a forensicSummary string of the improvements and visible details. Return as JSON.` }
+          ]
+        },
+        config: { responseMimeType: "application/json" }
+      });
+      const text = response.text;
+      return text ? JSON.parse(text) : null;
+    } catch (error) {
+      return null;
+    }
+  });
 };
 
-export const getLocalTrafficDensity = async (lat: number, lng: number): Promise<TrafficDensityResult> => {
-  try {
+export const getSmartRecommendations = async (stats: any): Promise<string[]> => {
+  return callAIWithRetry(async () => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash", // Maps grounding is supported in 2.5 series
-      contents: `Provide a detailed real-time traffic density analysis for the area around coordinates ${lat}, ${lng}. Identify major congestion points and suggest alternate routes if necessary.`,
-      config: {
-        tools: [{ googleMaps: {} }, { googleSearch: {} }],
-        toolConfig: { 
-          retrievalConfig: { 
-            latLng: { 
-              latitude: lat, 
-              longitude: lng 
-            } 
-          } 
-        }
-      },
+      model: 'gemini-3-flash-preview',
+      contents: `Based on these traffic stats: ${JSON.stringify(stats)}, generate 5 actionable infrastructure recommendations for city planners. Keep each recommendation short and specific.`
     });
-
-    const links: { title: string; uri: string }[] = [];
-    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-    
-    // Extracting grounding sources for verification (Required by policy)
-    if (chunks) {
-      chunks.forEach((chunk: any) => {
-        if (chunk.web) {
-          links.push({ title: chunk.web.title || "Web Reference", uri: chunk.web.uri });
-        }
-        if (chunk.maps) {
-          links.push({ title: chunk.maps.title || "Maps Location", uri: chunk.maps.uri });
-        }
-      });
-    }
-
-    return { 
-      text: response.text || "Live traffic insights currently unavailable.", 
-      links: links 
-    };
-  } catch (error) {
-    console.error("Traffic analysis error:", error);
-    return { text: "Neural road network offline.", links: [] };
-  }
+    return response.text.split('\n').filter(l => l.length > 5);
+  });
 };

@@ -28,11 +28,8 @@ export const getAnalyticsSummary = (): AnalyticsStats => {
   const stats: AnalyticsStats = {
     totalViolations: violations.length,
     revenue: { total: 0, pending: 0, collected: 0 },
-    byType: {
-      [ViolationType.OVERSPEEDING]: 0,
-      [ViolationType.SIGNAL_JUMP]: 0,
-    },
-    byWeather: { Clear: 0, Rainy: 0, Foggy: 0 },
+    byType: {},
+    byWeather: {},
     topOffenders: [],
     hourlyTrends: []
   };
@@ -41,14 +38,15 @@ export const getAnalyticsSummary = (): AnalyticsStats => {
 
   violations.forEach(v => {
     stats.revenue.total += v.fineAmount;
+    // Fixed: Accessed status property which is now defined in ViolationRecord
     if (v.status === 'Paid') stats.revenue.collected += v.fineAmount;
     else if (v.status === 'Pending') stats.revenue.pending += v.fineAmount;
 
     v.violationType.forEach(t => {
-      if (stats.byType[t] !== undefined) stats.byType[t]++;
+      stats.byType[t] = (stats.byType[t] || 0) + 1;
     });
 
-    stats.byWeather[v.weather]++;
+    stats.byWeather[v.weather] = (stats.byWeather[v.weather] || 0) + 1;
     offenderMap[v.vehicleNumber] = (offenderMap[v.vehicleNumber] || 0) + 1;
   });
 
@@ -72,6 +70,7 @@ export const exportViolationsCSV = () => {
     v.speed,
     v.violationType.join(';'),
     v.fineAmount,
+    // Fixed: Accessed status property
     v.status,
     v.location
   ]);
