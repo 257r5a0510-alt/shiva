@@ -22,10 +22,12 @@ import {
   XCircle,
   Info,
   RefreshCw,
-  Clock
+  Clock,
+  Share2
 } from 'lucide-react';
 import { analyzeTrafficVideoFrame, ForensicReport, Incident } from '../services/ai';
-import { ViolationRecord, WeatherState } from '../types';
+import { ViolationRecord, WeatherState, Severity } from '../types';
+import { createForensicRecord } from '../services/simulator';
 
 interface VideoAnalyzerProps {
   weather: WeatherState;
@@ -41,7 +43,7 @@ const VideoAnalyzer: React.FC<VideoAnalyzerProps> = ({ weather, onViolationDetec
   const [eventLog, setEventLog] = useState<Incident[]>([]);
   const [historySummary, setHistorySummary] = useState<string>('');
   const [isRateLimited, setIsRateLimited] = useState(false);
-  const [analysisInterval, setAnalysisInterval] = useState(8000); // Conservative 8s default to save quota
+  const [analysisInterval, setAnalysisInterval] = useState(8000);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -81,13 +83,23 @@ const VideoAnalyzer: React.FC<VideoAnalyzerProps> = ({ weather, onViolationDetec
       if (result) {
         if (result.isRateLimited) {
           setIsRateLimited(true);
-          setAnalysisInterval(15000); // Slow down significantly on rate limit
+          setAnalysisInterval(15000);
         } else {
           setAnalysisResult(result);
           setHistorySummary(result.summary);
 
-          // Update Event Log with new incidents
           if (result.incidents && result.incidents.length > 0) {
+            result.incidents.forEach(inc => {
+              // Share incident with the global App state
+              const forensicRecord = createForensicRecord(
+                inc.type.toUpperCase(),
+                inc.description,
+                inc.severity.toUpperCase() as Severity,
+                base64Image
+              );
+              onViolationDetected(forensicRecord);
+            });
+
             setEventLog(prev => {
               const newIncidents = result.incidents.filter(ni => 
                 !prev.some(pi => pi.description === ni.description && (Date.now() - pi.timestamp < 10000))
@@ -99,9 +111,8 @@ const VideoAnalyzer: React.FC<VideoAnalyzerProps> = ({ weather, onViolationDetec
       }
       setIsAnalyzing(false);
     }
-  }, [isAnalyzing, isPlaying, weather, historySummary, isRateLimited]);
+  }, [isAnalyzing, isPlaying, weather, historySummary, isRateLimited, onViolationDetected]);
 
-  // Dynamic frequency analyzer loop
   useEffect(() => {
     let timer: number;
     if (isPlaying && !isAnalyzing && !isRateLimited) {
@@ -175,7 +186,6 @@ const VideoAnalyzer: React.FC<VideoAnalyzerProps> = ({ weather, onViolationDetec
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Main Video Viewport */}
         <div className="lg:col-span-8 space-y-6">
           <div className="bg-slate-950 rounded-[3rem] overflow-hidden aspect-video relative shadow-2xl border-4 border-white group">
             {videoUrl ? (
@@ -188,7 +198,6 @@ const VideoAnalyzer: React.FC<VideoAnalyzerProps> = ({ weather, onViolationDetec
                   loop
                 />
                 
-                {/* HUD Overlay */}
                 <div className="absolute inset-0 pointer-events-none p-8 flex flex-col justify-between">
                    <div className="flex justify-between items-start">
                       <div className="bg-black/60 backdrop-blur-md px-4 py-2 rounded-xl border border-white/10 text-white font-mono text-[10px] space-y-1">
@@ -208,7 +217,6 @@ const VideoAnalyzer: React.FC<VideoAnalyzerProps> = ({ weather, onViolationDetec
                       )}
                    </div>
 
-                   {/* Bounding Boxes Visualization */}
                    {analysisResult && (
                      <div className="absolute inset-0">
                        {analysisResult.detections.map((d, i) => {
@@ -231,7 +239,6 @@ const VideoAnalyzer: React.FC<VideoAnalyzerProps> = ({ weather, onViolationDetec
                    )}
                 </div>
 
-                {/* Controls */}
                 <div className="absolute bottom-0 inset-x-0 p-6 bg-gradient-to-t from-black/90 to-transparent flex items-center gap-6 opacity-0 group-hover:opacity-100 transition-opacity">
                    <button onClick={togglePlay} className="p-4 bg-white rounded-full text-slate-900 shadow-xl hover:scale-110 transition-transform">
                       {isPlaying ? <Pause size={20} /> : <Play size={20} />}
@@ -270,16 +277,15 @@ const VideoAnalyzer: React.FC<VideoAnalyzerProps> = ({ weather, onViolationDetec
                 </div>
              </div>
              <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex items-center gap-4 group hover:border-red-200 transition-colors">
-                <div className="p-3 bg-red-100 text-red-600 rounded-2xl group-hover:bg-red-600 group-hover:text-white transition-all"><ShieldAlert size={24}/></div>
+                <div className="p-3 bg-red-100 text-red-600 rounded-2xl group-hover:bg-red-600 group-hover:text-white transition-all"><Share2 size={24}/></div>
                 <div>
-                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Accident Monitor</p>
-                   <p className="text-sm font-black text-slate-900">Auto-Detect ON</p>
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Broadcast Status</p>
+                   <p className="text-sm font-black text-slate-900">Sharing Active</p>
                 </div>
              </div>
           </div>
         </div>
 
-        {/* Real-time Analysis Results */}
         <div className="lg:col-span-4 flex flex-col gap-6 h-[calc(100%-4px)]">
            <div className="bg-slate-900 rounded-[3rem] p-8 text-white shadow-2xl flex-1 flex flex-col overflow-hidden">
               <h3 className="text-xl font-black flex items-center justify-between mb-8">
@@ -300,7 +306,6 @@ const VideoAnalyzer: React.FC<VideoAnalyzerProps> = ({ weather, onViolationDetec
                 </div>
               ) : (
                 <div className="space-y-6 flex-1 overflow-y-auto no-scrollbar pb-2">
-                   {/* Risk/Aggression Cards */}
                    <div className="grid grid-cols-2 gap-4">
                       <div className="p-5 bg-white/5 border border-white/10 rounded-[2rem]">
                         <div className="flex items-center gap-2 mb-2 text-red-400">
@@ -324,7 +329,6 @@ const VideoAnalyzer: React.FC<VideoAnalyzerProps> = ({ weather, onViolationDetec
                       </div>
                    </div>
 
-                   {/* AI Status Summary */}
                    <div className="p-6 bg-blue-600 rounded-[2.5rem] shadow-xl relative overflow-hidden group">
                       <div className="absolute -right-4 -bottom-4 text-white/10 group-hover:scale-125 transition-transform">
                         <Zap size={80} />
@@ -335,7 +339,6 @@ const VideoAnalyzer: React.FC<VideoAnalyzerProps> = ({ weather, onViolationDetec
                       </p>
                    </div>
 
-                   {/* Urban Advice */}
                    <div className="p-6 bg-slate-800 rounded-[2.5rem] border border-white/5">
                       <div className="flex items-center gap-3 text-green-400 mb-3">
                          <AlertCircle size={18} />
@@ -346,7 +349,6 @@ const VideoAnalyzer: React.FC<VideoAnalyzerProps> = ({ weather, onViolationDetec
                       </p>
                    </div>
 
-                   {/* Live Event Log Section */}
                    <div className="flex-1 flex flex-col space-y-4 pt-4">
                       <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
                         <HistoryIcon size={14} /> Critical Incident Log

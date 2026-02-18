@@ -11,7 +11,6 @@ import { saveViolation } from './storage';
 const VEHICLE_PREFIXES = ['KA', 'MH', 'DL', 'TN', 'UP', 'HR', 'GA'];
 const VEHICLE_TYPES = ['Car', 'Motorcycle', 'Truck', 'Bus', 'Auto'] as const;
 const JUNCTIONS = ['Central Plaza', 'East Highway', 'Silk Board', 'Airport Road', 'Metro Junction'];
-// Fixed: Changed 'Clear' to 'Sunny' to match WeatherState type
 const WEATHER_TYPES = ['Sunny', 'Rainy', 'Foggy'] as const;
 
 export const generateVehicleData = (): VehicleData => {
@@ -36,6 +35,37 @@ export const generateVehicleData = (): VehicleData => {
   };
 };
 
+export const createForensicRecord = (
+  type: string,
+  description: string,
+  severity: Severity,
+  image?: string
+): ViolationRecord => {
+  return {
+    id: Math.random().toString(36).substr(2, 9),
+    vehicleNumber: 'AI_DETECTION',
+    vehicleType: 'Car', // Default for generic incidents
+    speed: 0,
+    signalStatus: SignalStatus.GREEN,
+    timestamp: Date.now(),
+    riderCount: 1,
+    violationId: `AI-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+    violationType: [type as any],
+    severity,
+    fineAmount: severity === Severity.HIGH ? 5000 : 1000,
+    evidenceImage: image,
+    location: JUNCTIONS[0],
+    weather: 'Sunny',
+    aggressionScore: 90,
+    status: 'Pending',
+    lane: 1,
+    officerId: 'AI_VISION_CORE',
+    speedLimit: 60,
+    confidenceScore: 0.95,
+    requiresReview: true
+  };
+};
+
 export const detectViolations = (
   data: VehicleData, 
   evidenceImage?: string, 
@@ -46,7 +76,6 @@ export const detectViolations = (
   let totalFine = 0;
   let severity = Severity.LOW;
 
-  // 1. Speed Rule
   if (data.speed > customSpeedLimit) {
     violations.push(ViolationType.OVERSPEEDING);
     totalFine += 1000;
@@ -55,28 +84,24 @@ export const detectViolations = (
     else if (speedDelta > 20) severity = Severity.MEDIUM;
   }
 
-  // 2. Signal Rule
   if (data.signalStatus === SignalStatus.RED) {
     violations.push(ViolationType.SIGNAL_JUMP);
     totalFine += 1500;
     severity = Severity.HIGH;
   }
 
-  // 3. Triple Riding Rule (Motorcycle Only)
   if (data.vehicleType === 'Motorcycle' && data.riderCount > 2) {
     violations.push(ViolationType.TRIPLE_RIDING);
     totalFine += 2000;
     severity = Severity.HIGH;
   }
 
-  // 4. Helmet Rule (Motorcycle Only)
   if (data.vehicleType === 'Motorcycle' && !data.helmetDetected) {
     violations.push(ViolationType.HELMET);
     totalFine += 500;
     if (severity !== Severity.HIGH) severity = Severity.MEDIUM;
   }
 
-  // 5. Seat Belt Rule (Car / Truck Only)
   if ((data.vehicleType === 'Car' || data.vehicleType === 'Truck') && !data.seatbeltDetected) {
     violations.push(ViolationType.SEAT_BELT);
     totalFine += 1000;

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Bot, Sparkles, ChevronRight, Construction, Signal, Info } from 'lucide-react';
+import { Bot, Sparkles, ChevronRight, Construction, Signal, Info, Share2 } from 'lucide-react';
 import { getSmartRecommendations } from '../services/ai';
 import { ViolationRecord } from '../types';
 
@@ -21,6 +21,20 @@ const RecommendationAI: React.FC<RecommendationAIProps> = ({ violations }) => {
     };
     if (violations.length > 0) fetchTips();
   }, [violations]);
+
+  const handleShareTip = (tip: string) => {
+    const shareData = {
+      title: 'Infrastructure Strategy Insight',
+      text: `Proposed Infrastructure Recommendation:\n"${tip}"\n- Generated via TrafficEye AI Core.`,
+    };
+
+    if (navigator.share) {
+      navigator.share(shareData).catch(err => console.error('Error sharing:', err));
+    } else {
+      navigator.clipboard.writeText(shareData.text);
+      alert('Strategy copied to clipboard.');
+    }
+  };
 
   return (
     <div className="bg-white rounded-[3rem] p-8 shadow-xl border border-slate-100 overflow-hidden relative">
@@ -53,9 +67,17 @@ const RecommendationAI: React.FC<RecommendationAIProps> = ({ violations }) => {
                </div>
                <div className="flex-1">
                   <p className="text-sm font-bold text-slate-700 leading-snug">{tip}</p>
-                  <button className="mt-2 text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    Add to Civil Workplan <ChevronRight size={12}/>
-                  </button>
+                  <div className="mt-3 flex gap-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1">
+                      Add to Civil Workplan <ChevronRight size={12}/>
+                    </button>
+                    <button 
+                      onClick={() => handleShareTip(tip)}
+                      className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1 hover:text-blue-600"
+                    >
+                      <Share2 size={12}/> Share Strategy
+                    </button>
+                  </div>
                </div>
             </div>
           ))
@@ -67,7 +89,7 @@ const RecommendationAI: React.FC<RecommendationAIProps> = ({ violations }) => {
             <Info size={24} />
          </div>
          <p className="text-xs font-bold leading-relaxed text-slate-400">
-           Policy recommendations are generated using <span className="text-white">Gemini 3 Logic</span> based on localized Indian road telemetry and aggression heatmaps.
+           Policy recommendations are shared across modules and synced with the <span className="text-white">Command Intelligence Hub</span>.
          </p>
       </div>
     </div>

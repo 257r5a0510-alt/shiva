@@ -7,7 +7,7 @@ import {
 import { ViolationRecord, WeatherState } from '../types';
 import { 
   AlertCircle, Zap, ShieldAlert, Activity, Wind, CloudRain, Sun, 
-  Navigation, TrendingUp, Cpu, Map as MapIcon, Droplets
+  Navigation, TrendingUp, Cpu, Map as MapIcon, Droplets, Share2
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -20,8 +20,7 @@ const Dashboard: React.FC<DashboardProps> = ({ violations, weather = 'Sunny' }) 
     const totalAggression = violations.reduce((acc, v) => acc + (v.aggressionScore || 0), 0);
     const avgAggression = violations.length ? (totalAggression / violations.length).toFixed(1) : 0;
     
-    // Risk Score Calculation
-    const trafficDensity = 0.65; // Simulated
+    const trafficDensity = 0.65;
     const riskScore = (trafficDensity * 40) + (violations.length * 0.3) + (Number(avgAggression) * 0.3);
 
     const hourlyData = Array.from({ length: 12 }, (_, i) => ({
@@ -38,6 +37,25 @@ const Dashboard: React.FC<DashboardProps> = ({ violations, weather = 'Sunny' }) 
 
     return { avgAggression, riskScore, hourlyData, weatherImpact };
   }, [violations]);
+
+  const handleShareReport = async () => {
+    const shareData = {
+      title: 'TrafficEye City Safety Report',
+      text: `Smart City Intelligence Update:\n- Risk Index: ${stats.riskScore.toFixed(0)}%\n- Aggression Level: ${stats.avgAggression}%\n- Active Violations: ${violations.length}\n- Current Weather: ${weather}\nShared from TrafficEye Dashboard.`,
+      url: window.location.href,
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+      } catch (err) {
+        console.error('Sharing failed:', err);
+      }
+    } else {
+      alert('Sharing is not supported on this browser. Copying report text to clipboard instead.');
+      navigator.clipboard.writeText(shareData.text);
+    }
+  };
 
   const themeClasses = {
     Sunny: 'bg-amber-50/30 border-amber-100',
@@ -61,6 +79,13 @@ const Dashboard: React.FC<DashboardProps> = ({ violations, weather = 'Sunny' }) 
         </div>
         
         <div className="flex gap-4">
+          <button 
+            onClick={handleShareReport}
+            className="bg-white hover:bg-slate-50 px-6 py-3 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-3 transition-all active:scale-95"
+          >
+             <Share2 size={18} className="text-blue-600" />
+             <span className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Share Report</span>
+          </button>
           <div className="bg-white px-6 py-3 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
              <div className="text-right">
                 <p className="text-[10px] font-black text-slate-400 uppercase">Risk Index</p>
@@ -73,7 +98,6 @@ const Dashboard: React.FC<DashboardProps> = ({ violations, weather = 'Sunny' }) 
         </div>
       </header>
 
-      {/* KPI Section */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100 group hover:scale-105 transition-all">
           <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">Aggression Score</p>
@@ -111,7 +135,6 @@ const Dashboard: React.FC<DashboardProps> = ({ violations, weather = 'Sunny' }) 
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Main Risk Analysis Chart */}
         <div className="lg:col-span-8 bg-white p-8 rounded-[3rem] shadow-xl border border-slate-100">
           <div className="flex justify-between items-center mb-8">
             <h4 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
@@ -144,7 +167,6 @@ const Dashboard: React.FC<DashboardProps> = ({ violations, weather = 'Sunny' }) 
           </div>
         </div>
 
-        {/* Sidebar Mini Analytics */}
         <div className="lg:col-span-4 space-y-6">
           <div className="bg-slate-900 p-8 rounded-[3rem] text-white shadow-2xl relative overflow-hidden">
              <div className="absolute -right-4 -top-4 opacity-10">
