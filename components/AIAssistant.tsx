@@ -12,7 +12,18 @@ import {
   ShieldQuestion,
   Info,
   History,
-  Terminal
+  Terminal,
+  TrendingUp,
+  AlertTriangle,
+  Brain,
+  Fingerprint,
+  GanttChartSquare,
+  Download,
+  BellRing,
+  Eye,
+  MapPin,
+  Clock,
+  Activity
 } from 'lucide-react';
 
 interface AIAssistantProps {
@@ -20,12 +31,16 @@ interface AIAssistantProps {
 }
 
 const SUGGESTED_QUESTIONS = [
-  "Summarize today's violation trends.",
-  "Who are the top 3 persistent offenders?",
-  "How does the YOLOv8 detection work?",
-  "What is the total revenue collected?",
-  "Analyze high-risk speed zones.",
-  "Which weather condition causes more violations?"
+  "Summarize today's Hyderabad violation trends",
+  "Which area is highest risk right now?",
+  "Predict evening peak violation zones",
+  "Show repeat offenders in Madhapur",
+  "Explain why vehicle HR52G4940 was flagged",
+  "What violation type is increasing this week?",
+  "Generate enforcement strategy for LB Nagar",
+  "Compare this week vs last week violations",
+  "Which time slot has highest signal jumping?",
+  "Detect anomaly in last 2 hours"
 ];
 
 const AIAssistant: React.FC<AIAssistantProps> = ({ violations }) => {
@@ -119,109 +134,213 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ violations }) => {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-140px)] bg-slate-50 rounded-3xl border border-slate-200 shadow-2xl overflow-hidden">
-      {/* Header */}
-      <div className="p-6 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800">
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-blue-600 rounded-2xl shadow-lg shadow-blue-500/20">
-            <Bot size={24} className="text-white" />
+    <div className="flex flex-col lg:flex-row h-[calc(100vh-140px)] bg-slate-50 rounded-2xl border border-slate-200 shadow-xl overflow-hidden">
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col border-r border-slate-200">
+        {/* Header */}
+        <div className="p-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-600 rounded-xl shadow-lg shadow-blue-500/20">
+              <Bot size={20} className="text-white" />
+            </div>
+            <div>
+              <h3 className="text-base font-black tracking-tight flex items-center gap-2">
+                Intelligence Hub
+                <span className="bg-green-500 w-1.5 h-1.5 rounded-full animate-pulse"></span>
+              </h3>
+              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Neural Analysis Engine • v3.5</p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-lg font-black tracking-tight flex items-center gap-2">
-              Intelligence Hub
-              <span className="bg-green-500 w-2 h-2 rounded-full animate-pulse"></span>
-            </h3>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Neural Analysis Engine • v3.1</p>
+          <div className="hidden md:flex gap-3">
+            <div className="text-right">
+              <p className="text-[9px] text-slate-500 uppercase font-black">Synced Records</p>
+              <p className="text-xs font-bold">{violations.length}</p>
+            </div>
+            <div className="w-px h-6 bg-slate-800"></div>
+            <div className="text-right">
+              <p className="text-[9px] text-slate-500 uppercase font-black">AI Latency</p>
+              <p className="text-xs font-bold">18ms</p>
+            </div>
           </div>
         </div>
-        <div className="hidden md:flex gap-4">
-          <div className="text-right">
-            <p className="text-[10px] text-slate-500 uppercase font-black">Synced Records</p>
-            <p className="text-sm font-bold">{violations.length}</p>
-          </div>
-          <div className="w-px h-8 bg-slate-800"></div>
-          <div className="text-right">
-            <p className="text-[10px] text-slate-500 uppercase font-black">AI Latency</p>
-            <p className="text-sm font-bold">24ms</p>
-          </div>
-        </div>
-      </div>
 
-      {/* Messages Area */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth">
-        {messages.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
-            <div className={`flex gap-3 max-w-[85%] ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-              <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                msg.role === 'user' ? 'bg-slate-200 text-slate-600' : 'bg-blue-100 text-blue-600'
-              }`}>
-                {msg.role === 'user' ? <History size={14} /> : <Sparkles size={14} />}
-              </div>
-              <div className={`p-4 rounded-2xl shadow-sm border ${
-                msg.role === 'user' 
-                  ? 'bg-slate-900 text-white border-slate-800 rounded-tr-none' 
-                  : 'bg-white border-slate-200 text-slate-800 rounded-tl-none'
-              }`}>
-                <div className="prose prose-sm max-w-none text-inherit font-medium leading-relaxed">
-                  {msg.text.split('\n').map((line, j) => (
-                    <p key={j} className={line.startsWith('-') || line.startsWith('*') ? 'ml-4' : 'mb-2'}>{line}</p>
-                  ))}
+        {/* Messages Area */}
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth">
+          {messages.map((msg, i) => (
+            <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+              <div className={`flex gap-2 max-w-[90%] ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                <div className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${
+                  msg.role === 'user' ? 'bg-slate-200 text-slate-600' : 'bg-blue-100 text-blue-600'
+                }`}>
+                  {msg.role === 'user' ? <History size={12} /> : <Sparkles size={12} />}
+                </div>
+                <div className={`p-3 rounded-xl shadow-sm border ${
+                  msg.role === 'user' 
+                    ? 'bg-slate-900 text-white border-slate-800 rounded-tr-none' 
+                    : 'bg-white border-slate-200 text-slate-800 rounded-tl-none'
+                }`}>
+                  <div className="prose prose-sm max-w-none text-inherit font-medium leading-relaxed text-[13px]">
+                    {msg.text.split('\n').map((line, j) => (
+                      <p key={j} className={line.startsWith('-') || line.startsWith('*') ? 'ml-3' : 'mb-1'}>{line}</p>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
+          ))}
+          
+          {loading && (
+            <div className="flex justify-start animate-pulse">
+              <div className="bg-white border border-slate-200 p-3 rounded-xl rounded-tl-none flex gap-2 items-center">
+                <Terminal size={14} className="text-blue-500 animate-spin" />
+                <span className="text-[10px] font-bold text-slate-400 tracking-widest uppercase">Processing forensic query...</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Suggested Questions Dock */}
+        <div className="px-4 py-2 bg-white border-t border-slate-100 flex gap-1.5 overflow-x-auto no-scrollbar">
+          {SUGGESTED_QUESTIONS.map((q, idx) => (
+            <button 
+              key={idx}
+              onClick={() => handleAskAI(q)}
+              className="whitespace-nowrap px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-full text-[9px] font-black text-slate-500 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-all uppercase tracking-wider flex items-center gap-1.5"
+            >
+              <ShieldQuestion size={10} />
+              {q}
+            </button>
+          ))}
+        </div>
+
+        {/* Input Area */}
+        <div className="p-4 bg-white border-t border-slate-100">
+          <div className="relative flex items-center gap-2">
+            <div className="absolute left-3.5 text-slate-400">
+              <MessageSquare size={16} />
+            </div>
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAskAI()}
+              placeholder="Inquire about Hyderabad traffic trends..."
+              className="flex-1 pl-10 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all font-medium text-sm text-slate-800"
+            />
+            <button
+              onClick={() => handleAskAI()}
+              disabled={loading || !input.trim()}
+              className="p-3 bg-slate-900 text-white rounded-xl hover:bg-black disabled:opacity-30 transition-all shadow-lg active:scale-95 group"
+            >
+              <Send size={18} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+            </button>
           </div>
-        ))}
-        
-        {loading && (
-          <div className="flex justify-start animate-pulse">
-            <div className="bg-white border border-slate-200 p-4 rounded-2xl rounded-tl-none flex gap-3 items-center">
-              <Terminal size={16} className="text-blue-500 animate-spin" />
-              <span className="text-xs font-bold text-slate-400 tracking-widest uppercase">Processing forensic query...</span>
+        </div>
+      </div>
+
+      {/* Advanced Modules Sidebar */}
+      <div className="w-full lg:w-[320px] bg-white overflow-y-auto no-scrollbar p-4 space-y-5">
+        {/* A. Real-Time Violation Insights */}
+        <section className="space-y-3">
+          <div className="flex items-center gap-2 text-slate-900">
+            <TrendingUp size={16} className="text-blue-600" />
+            <h4 className="text-[10px] font-black uppercase tracking-widest">Insights</h4>
+          </div>
+          <div className="space-y-2">
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-0.5">Live Trend</p>
+              <p className="text-xs font-bold text-slate-700">12% increase in signal jumps</p>
+            </div>
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter mb-1">Top Zones</p>
+              <div className="flex flex-wrap gap-1.5">
+                {['Madhapur', 'Gachibowli'].map(zone => (
+                  <span key={zone} className="px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded-md text-[8px] font-black uppercase">{zone}</span>
+                ))}
+              </div>
             </div>
           </div>
-        )}
-      </div>
+        </section>
 
-      {/* Suggested Questions Dock */}
-      <div className="px-6 py-3 bg-white border-t border-slate-100 flex gap-2 overflow-x-auto no-scrollbar">
-        {SUGGESTED_QUESTIONS.map((q, idx) => (
-          <button 
-            key={idx}
-            onClick={() => handleAskAI(q)}
-            className="whitespace-nowrap px-4 py-2 bg-slate-50 border border-slate-200 rounded-full text-[10px] font-black text-slate-500 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition-all uppercase tracking-wider flex items-center gap-2"
-          >
-            <ShieldQuestion size={12} />
-            {q}
-          </button>
-        ))}
-      </div>
-
-      {/* Input Area */}
-      <div className="p-6 bg-white border-t border-slate-100">
-        <div className="relative flex items-center gap-3">
-          <div className="absolute left-4 text-slate-400">
-            <MessageSquare size={18} />
+        {/* B. Predictive Risk Analysis */}
+        <section className="space-y-3">
+          <div className="flex items-center gap-2 text-slate-900">
+            <AlertTriangle size={16} className="text-amber-500" />
+            <h4 className="text-[10px] font-black uppercase tracking-widest">Predictive</h4>
           </div>
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleAskAI()}
-            placeholder="Inquire about analytics, YOLOv8 logic, or specific vehicle history..."
-            className="flex-1 pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-100 transition-all font-medium text-slate-800"
-          />
-          <button
-            onClick={() => handleAskAI()}
-            disabled={loading || !input.trim()}
-            className="p-4 bg-slate-900 text-white rounded-2xl hover:bg-black disabled:opacity-30 transition-all shadow-xl active:scale-95 group"
-          >
-            <Send size={20} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
-          </button>
-        </div>
-        <div className="mt-4 flex justify-between items-center text-[9px] font-black text-slate-400 uppercase tracking-widest px-2">
-           <span className="flex items-center gap-1"><Zap size={10} className="text-amber-500" /> End-to-End Encryption Active</span>
-           <span className="flex items-center gap-1"><BarChart3 size={10} className="text-blue-500" /> Real-time Database Link</span>
-        </div>
+          <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-[9px] font-black text-amber-700 uppercase">6hr Forecast</span>
+              <span className="px-1.5 py-0.5 bg-amber-200 text-amber-800 rounded-md text-[8px] font-black">HIGH</span>
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <Clock size={12} className="text-amber-600" />
+                <p className="text-[10px] font-bold text-amber-900">Peak: 18:30 - 20:00</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <MapPin size={12} className="text-amber-600" />
+                <p className="text-[10px] font-bold text-amber-900">Hotspot: Mehdipatnam</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* C. AI Explainability Panel */}
+        <section className="space-y-3">
+          <div className="flex items-center gap-2 text-slate-900">
+            <Brain size={16} className="text-indigo-600" />
+            <h4 className="text-[10px] font-black uppercase tracking-widest">Explain</h4>
+          </div>
+          <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 space-y-3">
+            <p className="text-[10px] font-medium text-indigo-900 leading-relaxed italic">"Violation flagged due to lane boundary overlap &gt;40%."</p>
+            <div className="space-y-2">
+              <div className="flex justify-between text-[8px] font-black text-indigo-700 uppercase">
+                <span>OCR</span>
+                <span>98.2%</span>
+              </div>
+              <div className="w-full h-1 bg-indigo-200 rounded-full overflow-hidden">
+                <div className="h-full bg-indigo-600 w-[98%]"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* D. Pattern Intelligence */}
+        <section className="space-y-3">
+          <div className="flex items-center gap-2 text-slate-900">
+            <Fingerprint size={16} className="text-emerald-600" />
+            <h4 className="text-[10px] font-black uppercase tracking-widest">Patterns</h4>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100 text-center">
+              <p className="text-[8px] font-black text-emerald-800 uppercase">Repeaters</p>
+              <p className="text-base font-black text-emerald-900">24</p>
+            </div>
+            <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100 text-center">
+              <p className="text-[8px] font-black text-emerald-800 uppercase">Clusters</p>
+              <p className="text-base font-black text-emerald-900">08</p>
+            </div>
+          </div>
+        </section>
+
+        {/* E. Quick Action Controls */}
+        <section className="space-y-3 pt-3 border-t border-slate-100">
+          <div className="flex items-center gap-2 text-slate-900">
+            <Zap size={16} className="text-blue-600" />
+            <h4 className="text-[10px] font-black uppercase tracking-widest">Actions</h4>
+          </div>
+          <div className="grid grid-cols-1 gap-2">
+            <button className="flex items-center justify-between px-3 py-2 bg-slate-900 text-white rounded-xl hover:bg-black transition-all group">
+              <span className="text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5"><BellRing size={12} /> Alert</span>
+              <Zap size={12} className="group-hover:scale-110 transition-transform" />
+            </button>
+            <button className="flex items-center justify-between px-3 py-2 bg-white border border-slate-200 text-slate-900 rounded-xl hover:bg-slate-50 transition-all group">
+              <span className="text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5"><Download size={12} /> Export</span>
+              <Download size={12} className="group-hover:translate-y-0.5 transition-transform" />
+            </button>
+          </div>
+        </section>
       </div>
 
       <style>{`

@@ -1,288 +1,157 @@
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { 
   Grid3X3, 
   Map as MapIcon, 
   TrendingUp, 
   AlertTriangle, 
   Activity, 
-  Users,
   Car,
   Wind,
   ShieldAlert,
   ArrowUpRight,
   Navigation,
   Crosshair,
-  AlertCircle
+  AlertCircle,
+  Settings2,
+  LocateFixed,
+  Info,
+  Loader2
 } from 'lucide-react';
 import { AreaIntelligence } from '../types';
 
+declare const L: any;
+
+const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+  const R = 6371; 
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
+
 const CityGrid: React.FC = () => {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [searchRadius, setSearchRadius] = useState<number>(100);
   const [currentZoneId, setCurrentZoneId] = useState<string | null>(null);
   const [liveMetrics, setLiveMetrics] = useState<Record<string, Partial<AreaIntelligence>>>({});
   const [alert, setAlert] = useState<{ msg: string; type: 'danger' | 'warning' } | null>(null);
 
-  // Define Zone Boundaries (Bangalore Centric)
-  const zones = useMemo<AreaIntelligence[]>(() => [
-    { 
-      zoneId: 'Z1', 
-      zoneName: 'Central District', 
-      congestionLevel: 84, 
-      riskScore: 72, 
-      activeIncidents: 4, 
-      avgSpeed: 12,
-      boundary: [12.96, 77.58, 12.98, 77.61] // MG Road area
-    },
-    { 
-      zoneId: 'Z2', 
-      zoneName: 'Highway East', 
-      congestionLevel: 42, 
-      riskScore: 45, 
-      activeIncidents: 1, 
-      avgSpeed: 74,
-      boundary: [12.95, 77.63, 12.97, 77.67] // Indiranagar/Old Airport Road
-    },
-    { 
-      zoneId: 'Z3', 
-      zoneName: 'South Tech Corridor', 
-      congestionLevel: 91, 
-      riskScore: 88, 
-      activeIncidents: 7, 
-      avgSpeed: 8,
-      boundary: [12.90, 77.60, 12.93, 77.63] // HSR/Silk Board
-    },
-    { 
-      zoneId: 'Z4', 
-      zoneName: 'Industrial North', 
-      congestionLevel: 31, 
-      riskScore: 24, 
-      activeIncidents: 0, 
-      avgSpeed: 52,
-      boundary: [13.00, 77.57, 13.05, 77.60] // Hebbal/Peenya
-    },
-    { 
-      zoneId: 'Z5', 
-      zoneName: 'Suburban West', 
-      congestionLevel: 55, 
-      riskScore: 32, 
-      activeIncidents: 2, 
-      avgSpeed: 38,
-      boundary: [12.96, 77.52, 12.99, 77.56] // Vijayanagar
-    },
-    { 
-      zoneId: 'Z6', 
-      zoneName: 'Airport Link', 
-      congestionLevel: 68, 
-      riskScore: 59, 
-      activeIncidents: 3, 
-      avgSpeed: 45,
-      boundary: [13.15, 77.65, 13.25, 77.75] // Airport
-    },
+  const mapRef = useRef<any>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const radiusCircleRef = useRef<any>(null);
+  const markersLayerRef = useRef<any>(null);
+
+  const allZones = useMemo<AreaIntelligence[]>(() => [
+    { zoneId: 'H1', zoneName: 'Madhapur / Hitech City', congestionLevel: 88, riskScore: 75, activeIncidents: 3, avgSpeed: 15, boundary: [17.44, 78.37, 17.46, 78.39] },
+    { zoneId: 'H2', zoneName: 'Gachibowli Corridor', congestionLevel: 82, riskScore: 68, activeIncidents: 2, avgSpeed: 18, boundary: [17.43, 78.33, 17.45, 78.36] },
+    { zoneId: 'H3', zoneName: 'Banjara Hills', congestionLevel: 75, riskScore: 60, activeIncidents: 1, avgSpeed: 22, boundary: [17.40, 78.43, 17.42, 78.45] },
+    { zoneId: 'H4', zoneName: 'Kukatpally Industrial', congestionLevel: 90, riskScore: 82, activeIncidents: 5, avgSpeed: 10, boundary: [17.48, 78.39, 17.50, 78.41] },
+    { zoneId: 'H5', zoneName: 'Charminar / Old City', congestionLevel: 95, riskScore: 88, activeIncidents: 4, avgSpeed: 8, boundary: [17.35, 78.47, 17.37, 78.49] },
+    { zoneId: 'H6', zoneName: 'Secunderabad Station', congestionLevel: 85, riskScore: 70, activeIncidents: 2, avgSpeed: 12, boundary: [17.43, 78.49, 17.45, 78.51] }
   ], []);
 
-  // Geolocation Polling
+  const nearbyZones = useMemo(() => {
+    if (!userLocation) return allZones;
+    return allZones.filter(z => {
+      if (!z.boundary) return false;
+      const centerLat = (z.boundary[0] + z.boundary[2]) / 2;
+      const centerLng = (z.boundary[1] + z.boundary[3]) / 2;
+      return getDistance(userLocation.lat, userLocation.lng, centerLat, centerLng) <= searchRadius;
+    });
+  }, [allZones, userLocation, searchRadius]);
+
+  useEffect(() => {
+    if (!mapContainerRef.current || mapRef.current) return;
+    const initialLat = 17.3850;
+    const initialLng = 78.4867;
+    const map = L.map(mapContainerRef.current, { zoomControl: false }).setView([initialLat, initialLng], 11);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap', className: 'map-tiles-dark' }).addTo(map);
+    markersLayerRef.current = L.layerGroup().addTo(map);
+    mapRef.current = map;
+    return () => { if (mapRef.current) mapRef.current.remove(); mapRef.current = null; };
+  }, []);
+
+  useEffect(() => {
+    if (!mapRef.current || !userLocation) return;
+    const map = mapRef.current;
+    if (radiusCircleRef.current) map.removeLayer(radiusCircleRef.current);
+    radiusCircleRef.current = L.circle([userLocation.lat, userLocation.lng], { radius: searchRadius * 1000, color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.1, weight: 2, dashArray: '5, 10' }).addTo(map);
+    markersLayerRef.current.clearLayers();
+    nearbyZones.forEach(z => {
+      const centerLat = (z.boundary![0] + z.boundary![2]) / 2;
+      const centerLng = (z.boundary![1] + z.boundary![3]) / 2;
+      L.marker([centerLat, centerLng], { icon: L.divIcon({ className: 'custom-marker', html: `<div class="p-2 rounded-full border-2 ${z.riskScore > 70 ? 'bg-red-50 border-white' : 'bg-blue-600 border-white'} shadow-xl text-white"><div class="w-2 h-2 rounded-full bg-white"></div></div>` }) }).addTo(markersLayerRef.current).bindPopup(`<div class="p-2 font-black text-xs uppercase">${z.zoneName}</div>`);
+    });
+    map.setView([userLocation.lat, userLocation.lng], map.getZoom());
+  }, [userLocation, searchRadius, nearbyZones]);
+
   useEffect(() => {
     const watcher = navigator.geolocation.watchPosition(
       (pos) => {
         const { latitude: lat, longitude: lng } = pos.coords;
         setUserLocation({ lat, lng });
-        
-        // Find current zone
-        const zone = zones.find(z => {
-          if (!z.boundary) return false;
-          const [minLat, minLng, maxLat, maxLng] = z.boundary;
+        const zone = allZones.find(z => {
+          const [minLat, minLng, maxLat, maxLng] = z.boundary!;
           return lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng;
         });
-
         if (zone) {
           if (zone.zoneId !== currentZoneId) {
             setCurrentZoneId(zone.zoneId);
-            if (zone.riskScore > 70) {
-              setAlert({ msg: `ENTERING HIGH RISK ZONE: ${zone.zoneName.toUpperCase()}`, type: 'danger' });
-            } else if (zone.congestionLevel > 80) {
-              setAlert({ msg: `HEAVY CONGESTION DETECTED IN ${zone.zoneName.toUpperCase()}`, type: 'warning' });
-            } else {
-              setAlert(null);
-            }
+            if (zone.riskScore > 70) setAlert({ msg: `HIGH RISK: ${zone.zoneName.toUpperCase()}`, type: 'danger' });
+            else if (zone.congestionLevel > 80) setAlert({ msg: `HEAVY CONGESTION: ${zone.zoneName.toUpperCase()}`, type: 'warning' });
+            else setAlert(null);
           }
-        } else {
-          setCurrentZoneId(null);
-          setAlert(null);
-        }
+        } else { setCurrentZoneId(null); setAlert(null); }
       },
-      (err) => console.error("Geolocation error:", err),
+      (err) => console.error(err),
       { enableHighAccuracy: true }
     );
-
     return () => navigator.geolocation.clearWatch(watcher);
-  }, [zones, currentZoneId]);
-
-  // Simulate Live Metric Fluctuations
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const updates: Record<string, Partial<AreaIntelligence>> = {};
-      zones.forEach(z => {
-        updates[z.zoneId] = {
-          congestionLevel: Math.max(0, Math.min(100, z.congestionLevel + (Math.random() - 0.5) * 5)),
-          avgSpeed: Math.max(5, Math.min(100, z.avgSpeed + (Math.random() - 0.5) * 10))
-        };
-      });
-      setLiveMetrics(prev => ({ ...prev, ...updates }));
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [zones]);
+  }, [allZones, currentZoneId]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
-      <header className="flex justify-between items-end">
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
         <div>
-          <h2 className="text-3xl font-black text-slate-900 tracking-tight">City Grid Intelligence</h2>
-          <p className="text-slate-500 font-medium italic">Holistic multi-zone traffic telemetry and predictive risk mapping.</p>
+          <h2 className="text-3xl font-black text-slate-900 tracking-tight">Hyderabad City Grid</h2>
+          <p className="text-slate-500 font-medium italic">Multi-zone telemetry for the Hyderabad Metropolitan Grid.</p>
         </div>
-        <div className="flex flex-col items-end gap-3">
-           {userLocation && (
-             <div className="bg-slate-900 text-white px-4 py-2 rounded-2xl border border-white/10 flex items-center gap-3 font-mono text-[10px] shadow-xl">
-                <Crosshair size={14} className="text-blue-400 animate-pulse" />
-                <span>LOC: {userLocation.lat.toFixed(4)}, {userLocation.lng.toFixed(4)}</span>
-             </div>
-           )}
-           <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-100">
-              <div className="w-2 h-2 bg-red-500 rounded-full animate-ping"></div>
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Live Grid Synchronized</span>
-           </div>
-        </div>
+        {userLocation && (
+          <div className="bg-slate-900 text-white px-4 py-2 rounded-2xl border border-white/10 flex items-center gap-3 font-mono text-[10px] shadow-xl">
+            <Crosshair size={14} className="text-blue-400 animate-pulse" />
+            <span>HYD_LOC: {userLocation.lat?.toFixed(4)}, {userLocation.lng?.toFixed(4)}</span>
+          </div>
+        )}
       </header>
 
-      {/* Global Alert System */}
-      {alert && (
-        <div className={`p-6 rounded-[2.5rem] flex items-center gap-6 animate-bounce shadow-2xl border-4 ${
-          alert.type === 'danger' ? 'bg-red-600 border-red-500 text-white' : 'bg-amber-500 border-amber-400 text-white'
-        }`}>
-           <div className="p-4 bg-white/20 rounded-3xl backdrop-blur-md">
-             <AlertCircle size={32} />
-           </div>
-           <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-80">Intelligence Alert</p>
-              <h4 className="text-xl font-black tracking-tight">{alert.msg}</h4>
-           </div>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-[500px]">
+        <div className="lg:col-span-12 bg-white p-2 rounded-[3.5rem] shadow-xl border border-slate-100 overflow-hidden relative">
+          <div ref={mapContainerRef} className="w-full h-full rounded-[3rem] z-0"></div>
+          {!userLocation && (
+             <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm z-20 flex flex-col items-center justify-center text-white">
+                <Loader2 className="w-12 h-12 animate-spin mb-4" />
+                <p className="font-black uppercase tracking-widest text-xs">Syncing Hyderabad Grid...</p>
+             </div>
+          )}
         </div>
-      )}
+      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {zones.map(zone => {
-          const isCurrent = zone.zoneId === currentZoneId;
-          const currentCongestion = Math.round(liveMetrics[zone.zoneId]?.congestionLevel || zone.congestionLevel);
-          const currentSpeed = Math.round(liveMetrics[zone.zoneId]?.avgSpeed || zone.avgSpeed);
-
-          return (
-            <div 
-              key={zone.zoneId} 
-              className={`group bg-white p-8 rounded-[3.5rem] shadow-xl border-2 transition-all relative overflow-hidden ${
-                isCurrent 
-                ? 'border-blue-500 ring-4 ring-blue-500/10 scale-[1.03] z-10' 
-                : 'border-slate-100 hover:scale-[1.02]'
-              }`}
-            >
-               {/* Location Indicator */}
-               {isCurrent && (
-                 <div className="absolute top-6 left-6 flex items-center gap-2 bg-blue-600 text-white px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest animate-pulse z-20 shadow-lg">
-                    <Navigation size={10} fill="currentColor" /> You are here
-                 </div>
-               )}
-
-               {/* Dynamic Background Indicator */}
-               <div className={`absolute top-0 right-0 w-32 h-32 opacity-5 translate-x-8 -translate-y-8 transition-transform group-hover:scale-110 ${isCurrent ? 'opacity-10 text-blue-600' : ''}`}>
-                  <MapIcon size={128} />
-               </div>
-
-               <div className="flex justify-between items-start mb-8 pt-4">
-                  <div>
-                     <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Zone {zone.zoneId}</span>
-                     <h3 className={`text-xl font-black mt-1 ${isCurrent ? 'text-blue-600' : 'text-slate-900'}`}>{zone.zoneName}</h3>
-                  </div>
-                  <div className={`p-4 rounded-3xl ${zone.riskScore > 70 ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
-                     <ShieldAlert size={24} className={zone.riskScore > 70 ? 'animate-pulse' : ''} />
-                  </div>
-               </div>
-
-               <div className="grid grid-cols-2 gap-8 mb-8">
-                  <div>
-                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Congestion</p>
-                     <p className={`text-2xl font-black ${currentCongestion > 80 ? 'text-red-600' : 'text-slate-900'}`}>
-                       {currentCongestion}%
-                     </p>
-                  </div>
-                  <div>
-                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Avg Speed</p>
-                     <p className="text-2xl font-black text-slate-900">{currentSpeed} <span className="text-xs">km/h</span></p>
-                  </div>
-               </div>
-
-               <div className="space-y-4">
-                  <div className="flex justify-between text-[10px] font-black uppercase mb-1">
-                     <span className="text-slate-500">Predicted Risk</span>
-                     <span className={zone.riskScore > 70 ? 'text-red-600' : 'text-slate-900'}>{zone.riskScore}/100</span>
-                  </div>
-                  <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                     <div 
-                      className={`h-full transition-all duration-1000 ${zone.riskScore > 70 ? 'bg-red-600' : isCurrent ? 'bg-blue-600 shadow-[0_0_10px_#3b82f6]' : 'bg-slate-400'}`} 
-                      style={{ width: `${zone.riskScore}%` }}
-                     ></div>
-                  </div>
-               </div>
-
-               <div className="mt-8 pt-6 border-t border-slate-50 flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                     <div className="flex flex-col">
-                        <span className="text-[9px] font-black text-slate-400 uppercase">Incidents</span>
-                        <span className="text-sm font-black text-slate-900">{zone.activeIncidents} Active</span>
-                     </div>
-                  </div>
-                  <button className={`p-3 rounded-2xl transition-all ${isCurrent ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-900 text-white hover:bg-blue-600'}`}>
-                     <ArrowUpRight size={18} />
-                  </button>
-               </div>
-            </div>
-          );
-        })}
-
-        {/* Aggregate City Stat Card */}
-        <div className="bg-slate-900 p-8 rounded-[3.5rem] shadow-2xl text-white flex flex-col justify-between relative overflow-hidden">
-           <div className="absolute top-0 right-0 p-8 opacity-10">
-              <Grid3X3 size={120} />
-           </div>
-           
-           <div>
-              <h3 className="text-2xl font-black mb-2">City Aggregate</h3>
-              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Global Telemetry Pass</p>
-           </div>
-
-           <div className="space-y-6 my-10">
-              <div className="flex items-center gap-6">
-                 <div className="p-4 bg-white/10 rounded-[2rem] text-blue-400 shadow-inner"><Car size={32}/></div>
-                 <div>
-                    <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Fleet Density</p>
-                    <p className="text-3xl font-black">12.4k <span className="text-sm font-normal text-slate-500">Vehicles</span></p>
-                 </div>
-              </div>
-              <div className="flex items-center gap-6">
-                 <div className="p-4 bg-white/10 rounded-[2rem] text-amber-400 shadow-inner"><Wind size={32}/></div>
-                 <div>
-                    <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Grid Stability</p>
-                    <p className="text-3xl font-black">Medium</p>
-                 </div>
-              </div>
-           </div>
-
-           <div className="p-6 bg-white/5 border border-white/10 rounded-[2.5rem]">
-              <div className="flex items-center gap-3 text-green-400 mb-2">
-                 <TrendingUp size={18}/>
-                 <span className="text-[10px] font-black uppercase tracking-widest">Efficiency Rating</span>
-              </div>
-              <p className="text-xl font-black">74.2% <span className="text-xs text-slate-500 font-normal">+1.2% Trend</span></p>
-           </div>
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mt-12">
+        {nearbyZones.map(zone => (
+          <div key={zone.zoneId} className={`p-8 rounded-[3rem] shadow-xl border-2 transition-all relative overflow-hidden bg-white ${zone.zoneId === currentZoneId ? 'border-blue-500 scale-[1.02]' : 'border-slate-100'}`}>
+             <h3 className="text-xl font-black">{zone.zoneName}</h3>
+             <div className="grid grid-cols-2 gap-4 mt-6">
+                <div><p className="text-[10px] font-black text-slate-400 uppercase">Congestion</p><p className="text-2xl font-black">{zone.congestionLevel}%</p></div>
+                <div><p className="text-[10px] font-black text-slate-400 uppercase">Avg Speed</p><p className="text-2xl font-black">{zone.avgSpeed} <span className="text-xs">km/h</span></p></div>
+             </div>
+             <div className="mt-8 pt-6 border-t border-slate-50 flex items-center justify-between">
+                <span className={`text-[10px] font-black uppercase tracking-widest ${zone.riskScore > 70 ? 'text-red-500' : 'text-green-500'}`}>Risk Score: {zone.riskScore}</span>
+                <div className="p-3 bg-slate-900 text-white rounded-2xl"><ArrowUpRight size={18} /></div>
+             </div>
+          </div>
+        ))}
       </div>
     </div>
   );

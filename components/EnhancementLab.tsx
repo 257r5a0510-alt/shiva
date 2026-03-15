@@ -206,8 +206,8 @@ const EnhancementLab: React.FC = () => {
                 
                 <div className="absolute bottom-6 left-6 right-6 flex justify-between items-end opacity-0 group-hover:opacity-100 transition-opacity">
                    <div className="bg-black/40 backdrop-blur-md p-3 rounded-xl border border-white/10 text-[10px] text-white font-mono">
-                      POS_X: {magnifierPos.x.toFixed(1)}%<br/>
-                      POS_Y: {magnifierPos.y.toFixed(1)}%
+                      POS_X: {(magnifierPos?.x || 0).toFixed(1)}%<br/>
+                      POS_Y: {(magnifierPos?.y || 0).toFixed(1)}%
                    </div>
                    <div className="flex gap-2">
                       <div className="p-2 bg-blue-600 rounded-lg text-white"><Maximize size={16}/></div>
@@ -241,7 +241,6 @@ const EnhancementLab: React.FC = () => {
                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Brightness</label>
                <input type="range" min="50" max="150" value={filters.brightness} onChange={e => setFilters({...filters, brightness: Number(e.target.value)})} className="w-full h-1 bg-slate-100 rounded-lg appearance-none accent-blue-600" />
             </div>
-            {/* Fix: Changed runAIAnalysis to runEnhance to fix "Cannot find name 'runAIAnalysis'" error */}
             <button 
               disabled={!image || isProcessing}
               onClick={runEnhance}
@@ -254,7 +253,6 @@ const EnhancementLab: React.FC = () => {
 
         {/* Sidebar Info */}
         <div className="lg:col-span-4 space-y-6">
-          {/* Histogram Visualization */}
           <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
              <h3 className="text-xl font-black text-slate-900 flex items-center gap-3 mb-6">
                <BarChart2 className="text-blue-600" size={24} /> Intensity Histogram
@@ -286,15 +284,15 @@ const EnhancementLab: React.FC = () => {
                    <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-3">Neural Reconstruction Confidence</p>
                    <div className="flex items-center gap-4">
                       <div className="flex-1 bg-blue-200 h-2 rounded-full overflow-hidden">
-                        <div className="bg-blue-600 h-full transition-all duration-1000" style={{ width: `${result.confidence * 100}%` }}></div>
+                        <div className="bg-blue-600 h-full transition-all duration-1000" style={{ width: `${(result?.confidence || 0) * 100}%` }}></div>
                       </div>
-                      <span className="font-black text-blue-800">{(result.confidence * 100).toFixed(0)}%</span>
+                      <span className="font-black text-blue-800">{((result?.confidence || 0) * 100).toFixed(0)}%</span>
                    </div>
                 </div>
                 <div className="space-y-3">
                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Character Recognition</p>
                    <p className="text-sm font-medium text-slate-600 leading-relaxed italic border-l-4 border-blue-200 pl-4 bg-slate-50 py-3 rounded-r-xl">
-                     "{result.forensicSummary}"
+                     "{result?.forensicSummary || 'Restoration logic applied. Metadata verified.'}"
                    </p>
                 </div>
                 <div className="mt-auto pt-6 border-t border-slate-100">

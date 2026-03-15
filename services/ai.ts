@@ -1,61 +1,10 @@
 
 import { GoogleGenAI } from "@google/genai";
-import { VehicleCategory, WeatherState } from "../types";
+import { VehicleCategory, WeatherState, AdvancedAIResponse, CityIntelligence, EnhancementResult } from "../types";
 
-export interface Detection {
-  box: [number, number, number, number]; // [x, y, w, h] as percentages
-  label: string;
-  speed?: number;
-  behavior?: string;
-  id: string;
-}
+// Export EnhancementResult so it can be imported from this module as expected by components
+export type { EnhancementResult };
 
-export interface Incident {
-  type: 'accident' | 'near-miss' | 'erratic_driving' | 'obstruction';
-  severity: 'low' | 'medium' | 'high';
-  description: string;
-  timestamp: number;
-}
-
-export interface ForensicReport {
-  detections: Detection[];
-  incidents: Incident[];
-  aggressionScore: number;
-  riskScore: number;
-  summary: string;
-  infrastructureAdvice: string;
-  isRateLimited?: boolean;
-}
-
-export interface BoundingBox {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-export interface AIAnalysisResult {
-  vehicleNumber: string;
-  vehicleType: VehicleCategory;
-  estimatedSpeed: number;
-  riderCount: number;
-  helmetDetected: boolean;
-  seatbeltDetected: boolean;
-  confidence: { overall: number; localization: number; ocr: number; patternMatch: number };
-  rawOcr: string;
-  processingSteps: string[];
-  boundingBox?: BoundingBox;
-  plateBoundingBox?: BoundingBox;
-}
-
-export interface EnhancementResult {
-  confidence: number;
-  forensicSummary: string;
-}
-
-/**
- * Utility to handle API calls with exponential backoff for rate limits (429 errors).
- */
 async function callAIWithRetry<T>(fn: () => Promise<T>, maxRetries = 2): Promise<T> {
   let attempt = 0;
   while (attempt <= maxRetries) {
@@ -65,7 +14,6 @@ async function callAIWithRetry<T>(fn: () => Promise<T>, maxRetries = 2): Promise
       const isRateLimit = error?.message?.includes('429') || error?.status === 429 || error?.message?.includes('RESOURCE_EXHAUSTED');
       if (isRateLimit && attempt < maxRetries) {
         const delay = Math.pow(2, attempt) * 2000 + Math.random() * 1000;
-        console.warn(`Rate limit hit. Retrying in ${Math.round(delay)}ms... (Attempt ${attempt + 1})`);
         await new Promise(resolve => setTimeout(resolve, delay));
         attempt++;
         continue;
@@ -76,24 +24,47 @@ async function callAIWithRetry<T>(fn: () => Promise<T>, maxRetries = 2): Promise
   throw new Error('Max retries exceeded');
 }
 
-export const analyzeRouteSafety = async (source: string, destination: string, weather: WeatherState): Promise<string> => {
+export const getHyderabadIntelligence = async (): Promise<CityIntelligence | null> => {
   return callAIWithRetry(async () => {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Perform a tactical traffic safety audit for a route from ${source} to ${destination} in an Indian city context during ${weather} weather.
-        Identify 1 specific road safety risk (e.g., specific junction accidents, waterlogging, or high-speed curves) and give 1 actionable advice for the driver.
-        Keep it under 30 words.`
+        contents: `You are an advanced Smart City Traffic Vision AI configured specifically for Hyderabad, India.
+Analyze the traffic conditions and fetch real-time weather for Hyderabad.
+Include: Madhapur, Gachibowli, Banjara Hills, Kukatpally, LB Nagar, Secunderabad, Charminar, Hitech City, Mehdipatnam.
+Return STRICT JSON ONLY:
+{
+  "city": "Hyderabad",
+  "areas": [
+    {
+      "name": "Area Name",
+      "risk_percentage": 0-100,
+      "risk_level": "Low/Medium/High"
+    }
+  ],
+  "current_weather": {
+    "temperature": "XX°C",
+    "condition": "Sunny/Rainy/Cloudy/Foggy",
+    "humidity": "XX%",
+    "wind_speed": "X km/h",
+    "last_updated": "Timestamp"
+  }
+}`,
+        config: {
+          tools: [{ googleSearch: {} }],
+          responseMimeType: "application/json"
+        },
       });
-      return response.text.trim();
+      return response.text ? JSON.parse(response.text) : null;
     } catch (error) {
-      return "Caution: Dynamic traffic density detected. Maintain standard safe distance.";
+      console.error("Hyderabad Intelligence API Failed:", error);
+      return null;
     }
   });
 };
 
-export const analyzeTrafficVideoFrame = async (base64Image: string, weather: WeatherState, historySummary?: string): Promise<ForensicReport | null> => {
+export const analyzeTrafficVideoFrame = async (base64Image: string, weather: WeatherState): Promise<AdvancedAIResponse | null> => {
   try {
     return await callAIWithRetry(async () => {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -102,46 +73,38 @@ export const analyzeTrafficVideoFrame = async (base64Image: string, weather: Wea
         contents: {
           parts: [
             { inlineData: { mimeType: 'image/jpeg', data: base64Image.split(',')[1] } },
-            { text: `Act as a specialized traffic vision system. Analyze this frame from a traffic feed. 
-            Context: Weather is ${weather}. 
-            Previous Context (for tracking): ${historySummary || 'None'}.
+            { text: `You are an advanced Smart City Traffic Vision AI optimized for real-time monitoring.
+Analyze the provided traffic video frame and perform:
+1. VEHICLE DETECTION: Detect every vehicle (car, motorcycle, auto rickshaw, truck, bus). Assign tracking ID. Provide bbox [x1, y1, x2, y2] in percentages.
+2. ANPR: Extract the license plate number for EVERY detected vehicle if visible. Format: Indian [A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{4}.
+3. BEHAVIOR: Detect abnormal motion or sudden speed drops.
+4. COLLISION DETECTION: Identify accidents using vehicle-to-vehicle overlap and impact motion analysis.
 
-            Detect and return a JSON object with:
-            1. 'detections': Array of detected objects (car, motorcycle, pedestrian, truck, debris). 
-               Include 'box' [x, y, w, h] as percentages, 'label', 'speed' (estimate in km/h), 'behavior' (braking, turning, accelerating, stationary), and a consistent 'id' if possible.
-            2. 'incidents': Array of current anomalies. Types: 'accident' (collisions, flipped vehicles), 'near-miss' (dangerous proximity), 'erratic_driving' (lane weaving, sudden stops), 'obstruction' (debris, stalled vehicle).
-            3. 'aggressionScore': 0-100 score for overall traffic flow chaos.
-            4. 'riskScore': 0-100 safety risk level.
-            5. 'summary': A concise one-sentence status (e.g., "Flowing smoothly" or "Accident detected in lane 2").
-            6. 'infrastructureAdvice': Practical urban engineering suggestion based on visible congestion or behavior.
+Weather context: ${weather}.
 
-            If NO accident is detected, return an empty 'incidents' array. Do not invent accidents.
-            Return ONLY valid JSON.` }
+Return ONLY STRICT JSON matching this schema:
+{
+  "vehicles": [{"id": "string", "type": "string", "confidence": number, "speed_estimated_kmph": number, "bbox": [number, number, number, number], "status": "normal|abnormal", "plate": "string|null"}],
+  "collision_detected": boolean,
+  "collision_confidence": number,
+  "collision_zone_coordinates": [number, number, number, number],
+  "vehicles_involved": ["string"],
+  "alert_level": "LOW|MEDIUM|HIGH",
+  "warning_message": "string"
+}` }
           ]
         },
         config: { responseMimeType: "application/json" }
       });
-      const text = response.text;
-      return text ? JSON.parse(text) : null;
-    }, 1); // Only 1 retry for real-time video to avoid excessive lag
-  } catch (error: any) {
-    if (error?.message?.includes('429') || error?.message?.includes('RESOURCE_EXHAUSTED')) {
-      return {
-        detections: [],
-        incidents: [],
-        aggressionScore: 0,
-        riskScore: 0,
-        summary: "Neural link throttled by API quota limits.",
-        infrastructureAdvice: "Increase compute quota or optimize frame intervals.",
-        isRateLimited: true
-      };
-    }
-    console.error("Neural Analysis Failed:", error);
+      return response.text ? JSON.parse(response.text) : null;
+    }, 1);
+  } catch (error) {
+    console.error("Advanced Vision API Failed:", error);
     return null;
   }
 };
 
-export const analyzeVehicleImage = async (base64Image: string): Promise<AIAnalysisResult | null> => {
+export const analyzeVehicleImage = async (base64Image: string): Promise<any | null> => {
   return callAIWithRetry(async () => {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -150,48 +113,80 @@ export const analyzeVehicleImage = async (base64Image: string): Promise<AIAnalys
         contents: {
           parts: [
             { inlineData: { mimeType: 'image/jpeg', data: base64Image.split(',')[1] } },
-            { text: `Analyze this vehicle image for forensic traffic data extraction. Provide vehicleNumber, vehicleType, estimatedSpeed, riderCount, helmetDetected (boolean), seatbeltDetected (boolean), confidence scores, boundingBox, and plateBoundingBox (each with x, y, w, h in percentages). Return as JSON.` }
+            { text: `You are an advanced traffic vision AI acting as a full ANPR pipeline (YOLO/OpenCV + EasyOCR).
+Analyze the uploaded image and perform the following simulated pipeline steps:
+1. Detect the vehicle and license plate region using simulated YOLO object detection.
+2. Crop and preprocess the plate image (grayscale, threshold).
+3. Apply simulated OCR (EasyOCR/Tesseract) to extract the vehicle number.
+4. Clean the extracted text: Remove spaces, Convert to uppercase, Remove special characters.
+5. Validate the plate using Indian format Pattern: [A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{4}.
+6. If multiple plates are found, choose the clearest and highest confidence one.
+7. If detection confidence is below 70%, mark as LOW_CONFIDENCE.
+
+Return ONLY JSON in this format:
+{
+  "vehicle_type": "string",
+  "plate_detected": boolean,
+  "plate_number": "string",
+  "confidence_score": number,
+  "validation_status": "VALID / INVALID / LOW_CONFIDENCE",
+  "error_message": "string | null"
+}` }
           ]
         },
         config: { responseMimeType: "application/json" }
       });
-      const text = response.text;
-      return text ? JSON.parse(text) : null;
+      return response.text ? JSON.parse(response.text) : null;
     } catch (error) {
+      console.error("Vehicle Analysis Error:", error);
       return null;
     }
   });
 };
 
-export const enhanceCCTVImage = async (base64Image: string): Promise<EnhancementResult | null> => {
-  return callAIWithRetry(async () => {
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: {
-          parts: [
-            { inlineData: { mimeType: 'image/jpeg', data: base64Image.split(',')[1] } },
-            { text: `Perform forensic enhancement on this CCTV frame. Improve clarity for identification. Provide a confidence score (0-1) and a forensicSummary string of the improvements and visible details. Return as JSON.` }
-          ]
-        },
-        config: { responseMimeType: "application/json" }
-      });
-      const text = response.text;
-      return text ? JSON.parse(text) : null;
-    } catch (error) {
-      return null;
-    }
-  });
-};
-
-export const getSmartRecommendations = async (stats: any): Promise<string[]> => {
+export const analyzeRouteSafety = async (source: string, destination: string, weather: WeatherState, coords?: { lat: number, lng: number }) => {
   return callAIWithRetry(async () => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `Based on these traffic stats: ${JSON.stringify(stats)}, generate 5 actionable infrastructure recommendations for city planners. Keep each recommendation short and specific.`
+      model: 'gemini-2.5-flash',
+      contents: `Route safety audit from ${source} to ${destination} in Hyderabad during ${weather} weather. Use Google Maps data for current hazards.`,
+      config: { 
+        tools: [{ googleMaps: {} }],
+        ...(coords && { toolConfig: { retrievalConfig: { latLng: { latitude: coords.lat, longitude: coords.lng } } } })
+      },
     });
-    return response.text.split('\n').filter(l => l.length > 5);
+    return { 
+      text: response.text || "Safe passage predicted.", 
+      links: response.candidates?.[0]?.groundingMetadata?.groundingChunks?.filter(c => c.maps).map(c => ({ title: c.maps?.title || "Map", uri: c.maps?.uri || "" })) || []
+    };
   });
+};
+
+export const analyzeVideoUnderstanding = async (frames: string[]) => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const parts = frames.map(f => ({ inlineData: { mimeType: 'image/jpeg', data: f.split(',')[1] } }));
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-pro-preview',
+    contents: { parts: [...parts, { text: "Explain the high-level traffic narrative and key safety takeaways from this video sequence." }] }
+  });
+  return response.text;
+};
+
+export const enhanceCCTVImage = async (img: string): Promise<EnhancementResult | null> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: { parts: [{ inlineData: { mimeType: 'image/jpeg', data: img.split(',')[1] } }, { text: "Perform forensic enhancement. Return JSON with confidence and forensicSummary." }] },
+    config: { responseMimeType: "application/json" }
+  });
+  return response.text ? JSON.parse(response.text) : null;
+};
+
+export const getSmartRecommendations = async (stats: any) => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: `Infrastructure advice for: ${JSON.stringify(stats)}`
+  });
+  return response.text.split('\n').filter(l => l.length > 5);
 };

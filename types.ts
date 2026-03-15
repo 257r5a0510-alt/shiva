@@ -22,7 +22,7 @@ export enum SignalStatus {
   YELLOW = 'YELLOW'
 }
 
-export type WeatherState = 'Sunny' | 'Rainy' | 'Foggy' | 'Night' | 'Cloudy';
+export type WeatherState = 'Sunny' | 'Rainy' | 'Foggy' | 'Night' | 'Cloudy' | 'Clear';
 export type RecordStatus = 'Pending' | 'Paid' | 'Disputed';
 export type VehicleCategory = 'Car' | 'Motorcycle' | 'Truck' | 'Bus' | 'Auto';
 
@@ -53,6 +53,18 @@ export interface VehicleData {
   isVerified?: boolean;
 }
 
+export interface ConfidenceBreakdown {
+  ocr: number;
+  classification: number;
+  violation: number;
+  overall: number;
+}
+
+export interface Geolocation {
+  lat: number;
+  lng: number;
+}
+
 export interface ViolationRecord extends VehicleData {
   violationId: string;
   violationType: ViolationType[];
@@ -66,7 +78,9 @@ export interface ViolationRecord extends VehicleData {
   lane: number;
   officerId: string;
   speedLimit: number;
-  confidenceScore: number;
+  confidenceScore: number; // legacy overall
+  confidenceBreakdown: ConfidenceBreakdown;
+  geo: Geolocation;
   requiresReview: boolean;
 }
 
@@ -86,17 +100,75 @@ export interface AreaIntelligence {
   riskScore: number; // 0-100
   activeIncidents: number;
   avgSpeed: number;
-  // Geographic boundary [minLat, minLng, maxLat, maxLng]
   boundary?: [number, number, number, number];
 }
 
-export interface VideoFrameAnalysis {
+export interface AdvancedAIVehicle {
+  id: string;
+  type: string;
+  confidence: number;
+  speed_estimated_kmph: number;
+  bbox: [number, number, number, number];
+  status: 'normal' | 'abnormal' | 'involved_in_accident';
+  plate?: string;
+}
+
+export interface AdvancedAIResponse {
+  vehicles: AdvancedAIVehicle[];
+  collision_detected: boolean;
+  collision_confidence: number;
+  collision_zone_coordinates: [number, number, number, number];
+  vehicles_involved: string[];
+  alert_level: 'LOW' | 'MEDIUM' | 'HIGH';
+  warning_message: string;
+}
+
+// Hyderabad Specific Interfaces
+export interface HyderabadArea {
+  name: string;
+  risk_percentage: number;
+  risk_level: 'Low' | 'Medium' | 'High';
+}
+
+export interface CityIntelligence {
+  city: string;
+  areas: HyderabadArea[];
+  current_weather: {
+    temperature: string;
+    condition: string;
+    humidity: string;
+    wind_speed: string;
+    last_updated: string;
+  };
+}
+
+export interface EnhancementResult {
+  confidence: number;
+  forensicSummary: string;
+}
+
+// Interactivity Types
+export interface AppSettings {
+  darkMode: boolean;
+  liveTelemetry: boolean;
+  weatherSync: boolean;
+  notificationsEnabled: boolean;
+  monitoredZones: string[];
+}
+
+export interface AppNotification {
+  id: string;
+  title: string;
+  message: string;
+  type: 'alert' | 'info' | 'success' | 'warning';
   timestamp: number;
-  detections: {
-    box: [number, number, number, number]; // [x, y, w, h] in %
-    label: string;
-    violation?: string;
-    speed?: number;
-  }[];
-  aggressionScore: number;
+  read: boolean;
+}
+
+export interface SearchResult {
+  id: string;
+  title: string;
+  subtitle: string;
+  type: 'violation' | 'area' | 'vehicle';
+  originalData: any;
 }

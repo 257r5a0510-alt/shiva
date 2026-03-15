@@ -8,9 +8,17 @@ import {
 } from '../types';
 import { saveViolation } from './storage';
 
-const VEHICLE_PREFIXES = ['KA', 'MH', 'DL', 'TN', 'UP', 'HR', 'GA'];
+const VEHICLE_PREFIXES = ['TS', 'AP', 'KA', 'MH', 'DL'];
 const VEHICLE_TYPES = ['Car', 'Motorcycle', 'Truck', 'Bus', 'Auto'] as const;
-const JUNCTIONS = ['Central Plaza', 'East Highway', 'Silk Board', 'Airport Road', 'Metro Junction'];
+
+const JUNCTIONS = [
+  { name: 'Madhapur / Cyber Towers', lat: 17.4483, lng: 78.3915 },
+  { name: 'Gachibowli Junction', lat: 17.4401, lng: 78.3489 },
+  { name: 'Banjara Hills Rd No 12', lat: 17.4156, lng: 78.4347 },
+  { name: 'Kukatpally Housing Board', lat: 17.4948, lng: 78.3996 },
+  { name: 'LB Nagar Ring Road', lat: 17.3457, lng: 78.5522 }
+];
+
 const WEATHER_TYPES = ['Sunny', 'Rainy', 'Foggy'] as const;
 
 export const generateVehicleData = (): VehicleData => {
@@ -41,10 +49,11 @@ export const createForensicRecord = (
   severity: Severity,
   image?: string
 ): ViolationRecord => {
+  const junction = JUNCTIONS[Math.floor(Math.random() * JUNCTIONS.length)];
   return {
     id: Math.random().toString(36).substr(2, 9),
     vehicleNumber: 'AI_DETECTION',
-    vehicleType: 'Car', // Default for generic incidents
+    vehicleType: 'Car',
     speed: 0,
     signalStatus: SignalStatus.GREEN,
     timestamp: Date.now(),
@@ -54,7 +63,8 @@ export const createForensicRecord = (
     severity,
     fineAmount: severity === Severity.HIGH ? 5000 : 1000,
     evidenceImage: image,
-    location: JUNCTIONS[0],
+    location: junction.name,
+    geo: { lat: junction.lat, lng: junction.lng },
     weather: 'Sunny',
     aggressionScore: 90,
     status: 'Pending',
@@ -62,6 +72,12 @@ export const createForensicRecord = (
     officerId: 'AI_VISION_CORE',
     speedLimit: 60,
     confidenceScore: 0.95,
+    confidenceBreakdown: {
+      ocr: 0.98,
+      classification: 0.99,
+      violation: 0.95,
+      overall: 0.97
+    },
     requiresReview: true
   };
 };
@@ -109,6 +125,11 @@ export const detectViolations = (
   }
 
   if (violations.length > 0) {
+    const junction = JUNCTIONS[Math.floor(Math.random() * JUNCTIONS.length)];
+    const ocrConf = 0.85 + Math.random() * 0.14;
+    const classConf = 0.90 + Math.random() * 0.09;
+    const vioConf = 0.80 + Math.random() * 0.19;
+
     const record: ViolationRecord = {
       ...data,
       violationId: `VIO-${Date.now()}-${Math.floor(Math.random()*1000)}`,
@@ -116,13 +137,20 @@ export const detectViolations = (
       severity,
       fineAmount: totalFine,
       evidenceImage,
-      location: JUNCTIONS[Math.floor(Math.random() * JUNCTIONS.length)],
+      location: junction.name,
+      geo: { lat: junction.lat, lng: junction.lng },
       lane: Math.floor(Math.random() * 4) + 1,
       weather: WEATHER_TYPES[Math.floor(Math.random() * WEATHER_TYPES.length)],
       status: 'Pending',
       officerId: 'SYS_ADMIN',
       speedLimit: customSpeedLimit,
-      confidenceScore: confidenceScore,
+      confidenceScore: (ocrConf + classConf + vioConf) / 3,
+      confidenceBreakdown: {
+        ocr: ocrConf,
+        classification: classConf,
+        violation: vioConf,
+        overall: (ocrConf + classConf + vioConf) / 3
+      },
       requiresReview: confidenceScore < 0.75,
       aggressionScore: Math.floor(Math.random() * 100)
     };
